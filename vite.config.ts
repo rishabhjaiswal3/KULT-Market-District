@@ -24,6 +24,8 @@ const localBindingConfig = {
           binding: d1,
           database_name: "site-creator-d1",
           database_id: SITE_CREATOR_PLACEHOLDER_DATABASE_ID,
+          // dist/server/wrangler.json resolves this back to the repo drizzle folder.
+          migrations_dir: "../../drizzle",
         },
       ]
     : [],

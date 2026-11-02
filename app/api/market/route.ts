@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
     if (user && !guest.fresh) await claimGuest(user.userId, `guest:${guest.token}`);
     const state = await marketState(user?.userId ?? `guest:${guest.token}`, Boolean(user), Date.now(), request.nextUrl.searchParams.get("case"));
     return withCookie(NextResponse.json(state), guest.token, guest.fresh && !user, request.nextUrl.protocol === "https:");
-  } catch {
+  } catch (error) {
+    console.error(error);
     return NextResponse.json({ error: "Market District is temporarily unavailable." }, { status: 503 });
   }
 }

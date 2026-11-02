@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { ensureSchema } from "./ensure-schema";
 import { caseResult, dailyId, FROZEN_START_ID, generateFrozenDaily, getCaseConfig, publicCase, type Bar, type FrozenDaily } from "./market-cases";
 import { conveneCouncil, seasonKey, SPECIALISTS, specialistReport, type Council, type Job, type Specialist } from "./agency-engine";
 
@@ -14,6 +15,7 @@ async function parseDaily(id:string,row: DailyRow | null): Promise<FrozenDaily |
 }
 
 export async function frozenFor(id: string, now = Date.now(), create = false): Promise<FrozenDaily | null> {
+  await ensureSchema();
   if (!id.startsWith("daily-") || id < FROZEN_START_ID) return null;
   let row = await db().prepare("SELECT bars_json, regime, commitment, version FROM agency_daily_cases WHERE case_id=?").bind(id).first<DailyRow>();
   if (!row && create && id === dailyId(new Date(now)) && getCaseConfig(id, now)) {
@@ -63,6 +65,7 @@ export async function agencyOverview(owner:string,ids:string[],now:number,decisi
 }
 
 export async function dispatch(owner:string,id:string,specialist:unknown,now=Date.now()){
+  await ensureSchema();
   const role=SPECIALISTS.find(s=>s.id===specialist);
   if(!role)throw new AgencyError("Unknown specialist.");
   const config=getCaseConfig(id,now);
@@ -87,6 +90,7 @@ export async function dispatch(owner:string,id:string,specialist:unknown,now=Dat
   return state;
 }
 export async function convene(owner:string,id:string,now=Date.now()){
+  await ensureSchema();
   const config=getCaseConfig(id,now);
   if(!config || config.lockAt && Date.parse(config.lockAt)<=now)throw new AgencyError("Mission is closed.",409);
   if(await db().prepare("SELECT id FROM market_decisions WHERE owner=? AND case_id=?").bind(owner,id).first())throw new AgencyError("Decision already locked.",409);

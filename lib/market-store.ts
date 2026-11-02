@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { ensureSchema } from "./ensure-schema";
 import { init, passport } from "./store";
 import { agencyCaseResult, agencyExport, agencyOverview, authorizeMission, claimPractice, publicAgencyCase } from "./agency-store";
 import { dailyId, getCaseConfig, grade, replayIds, type Choice } from "./market-cases";
@@ -11,6 +12,7 @@ async function digest(value:string){const data=await crypto.subtle.digest("SHA-2
 function receiptInput(d:Decision){return d.mission_hash ? `v5|${d.case_id}|${d.choice}|${d.confidence}|${d.snapshot_hash}|${d.allocation_bps}|${d.credits_spent}|${d.mission_hash}|${d.created_at}`:`${d.case_id}|${d.choice}|${d.confidence}|${d.snapshot_hash}|${d.created_at}`;}
 
 export async function claimGuest(owner:string,guestOwner:string|null){
+  await ensureSchema();
   if(!guestOwner||guestOwner===owner)return;
   await claimPractice(owner,guestOwner);
   const rows=await db().prepare("SELECT id FROM market_decisions WHERE owner=? AND mode='replay' LIMIT 100").bind(guestOwner).all<{id:string}>();
@@ -50,6 +52,7 @@ async function league(now:number,owner:string|null){
   return {season:`UTC WEEK OF ${seasonKey(now)}`,rows:top.map((p,i)=>({rank:i+1,alias:nameMap.get(p.owner)?.alias??"Director",agentName:nameMap.get(p.owner)?.agentName??"Agent",equityCents:p.equityCents,scoreCents:score(p),maxDrawdownCents:p.maxDrawdownCents,creditsSpent:p.creditsSpent,brier:Math.round(p.totalBrier/p.played*10000)/10000,cases:p.played,me:p.owner===owner})),myRank:owner?sorted.findIndex(p=>p.owner===owner)+1||null:null,participantCount:sorted.length,todayEntries:rows.results.filter(r=>r.case_id===today).length,note:"UTC week; $10,000 virtual start; 100 equal research credits. Score = equity − 25% max drawdown − $0.20 per credit. Only resolved signed-in daily cases rank. Private beta query cap: 2,000 decisions."};
 }
 export async function marketState(owner:string,signedIn:boolean,now=Date.now(),requestedCase?:string|null){
+  await ensureSchema();
   if(signedIn)await init(owner);
   const [profile,decisions]=await Promise.all([
     signedIn?db().prepare("SELECT alias,agent_name FROM profiles WHERE owner=?").bind(owner).first<{alias:string;agent_name:string}>():Promise.resolve(null),
@@ -62,6 +65,7 @@ export async function marketState(owner:string,signedIn:boolean,now=Date.now(),r
   return {profile:{alias:profile?.alias??"Guest Director",agentName:profile?.agent_name??"Scout",stage:stageFor(completed),completed,signedIn},cases:cases.filter(Boolean),decisions:resolved,league:standings,agency,execution:"virtual_only",dataSource:"fictional_training_simulation",identityScope:signedIn?"site_user_only":"guest_cookie"};
 }
 export async function submitDecision(owner:string,caseId:string,choice:unknown,confidence:unknown,allocationBps:unknown,councilHash:unknown,now=Date.now()){
+  await ensureSchema();
   const config=getCaseConfig(caseId,now);if(!config)throw new MarketError("Mission unavailable.",404);
   if(config.lockAt&&Date.parse(config.lockAt)<=now)throw new MarketError("Daily mission closed.",409);
   if(!["BUY","SELL","HOLD"].includes(String(choice)))throw new MarketError("Choose BUY, SELL or HOLD.");

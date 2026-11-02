@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { ensureSchema } from "./ensure-schema";
 import { backtest, council, decide, equityCents, fill, forecastDirection, forwardScore, gate, getMarket, observedDirection, scenarioMarket, walkForward, START_CENTS, type Mandate, type Portfolio } from "./engine";
 
 type Row = Record<string, unknown>;
@@ -15,6 +16,7 @@ async function digest(s: string) {
 }
 
 export async function init(owner: string) {
+  await ensureSchema();
   const expiry = new Date(Date.now() + 14 * 86400000).toISOString();
   await db().batch([
     db().prepare("INSERT OR IGNORE INTO profiles (owner, alias, agent_name, tutorial_done, mode, strategy, created_at) VALUES (?, ?, 'Scout', 0, 'human', 'trend', ?)").bind(owner, `Director ${owner.slice(-4).toUpperCase()}`, nowIso()),
