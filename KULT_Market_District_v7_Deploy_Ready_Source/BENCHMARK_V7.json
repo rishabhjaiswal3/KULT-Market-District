@@ -1,0 +1,60 @@
+{
+  "cases": 1800,
+  "meanPnlDollars": {
+    "BUY": -3.57,
+    "SELL": -6.36,
+    "HOLD": 0,
+    "flow": 16.22,
+    "trend": -5.2,
+    "full": 9.22
+  },
+  "councilDecisions": {
+    "BUY": 563,
+    "SELL": 544,
+    "HOLD": 693
+  },
+  "byEpisode": {
+    "aftershock": {
+      "cases": 300,
+      "alwaysBuy": 0.05,
+      "alwaysSell": -11.65,
+      "flowNet": 26.22,
+      "fullCouncilNet": 19.22
+    },
+    "breakout": {
+      "cases": 300,
+      "alwaysBuy": -6.75,
+      "alwaysSell": -5.23,
+      "flowNet": 29.76,
+      "fullCouncilNet": 22.76
+    },
+    "accumulation": {
+      "cases": 300,
+      "alwaysBuy": -5.69,
+      "alwaysSell": -6.31,
+      "flowNet": 15.42,
+      "fullCouncilNet": 8.42
+    },
+    "circuit": {
+      "cases": 300,
+      "alwaysBuy": 0,
+      "alwaysSell": 0,
+      "flowNet": -2.4,
+      "fullCouncilNet": -9.4
+    },
+    "weekend": {
+      "cases": 300,
+      "alwaysBuy": -3.09,
+      "alwaysSell": -8.91,
+      "flowNet": 30.76,
+      "fullCouncilNet": 23.76
+    },
+    "quiet": {
+      "cases": 300,
+      "alwaysBuy": -5.95,
+      "alwaysSell": -6.05,
+      "flowNet": -2.45,
+      "fullCouncilNet": -9.45
+    }
+  }
+}

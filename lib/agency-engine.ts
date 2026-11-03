@@ -25,19 +25,27 @@ export function specialistReport(id: Specialist, bars: Bar[], brief: string): Re
     const previous = bars.slice(-16, -8).reduce((n, b) => n + b.volume, 0) / 8;
     const participation = ret(recent, previous);
     const divergent = Math.abs(six) > .003 && participation < -.08;
-    return { specialist: id, recommendation: divergent ? "HOLD" : participation > .08 ? recommendation : "HOLD", evidence: `Recent bar volume ${Math.round(recent)} versus ${Math.round(previous)} earlier (${pct(participation)}). ${divergent ? "Price moved while volume weakened: possible trap." : "Volume is bar data, not an order book."}`, metric: round(participation * 100), caveat: "No live order-flow or liquidity depth is available.", method: "Last eight completed bars versus prior eight", sourceCutoff: bars.length };
+    return { specialist: id, recommendation: divergent ? (recommendation === "BUY" ? "SELL" : recommendation === "SELL" ? "BUY" : "HOLD") : participation > .12 ? recommendation : "HOLD", evidence: `Recent bar volume ${Math.round(recent)} versus ${Math.round(previous)} earlier (${pct(participation)}). ${divergent ? "Price moved while volume weakened: fade the possible trap (unconfirmed)." : "Volume is bar data, not an order book."}`, metric: round(participation * 100), caveat: "No live order-flow or liquidity depth is available.", method: "Last eight completed bars versus prior eight", sourceCutoff: bars.length };
   }
   if (id === "quant") {
+    // Sample disjoint forward four-bar holds, avoiding the v5 mistake of charging a
+    // complete 30bp round trip against every one-bar move. Still a tiny sample.
     let trendNet = 0, fadeNet = 0, observations = 0;
-    for (let i = 26; i < bars.length - 1; i++) {
-      const signal = ret(bars[i].close, bars[i - 4].close) > 0 ? 1 : -1;
-      const next = ret(bars[i + 1].close, bars[i].close);
-      trendNet += signal * next - .003;
-      fadeNet += -signal * next - .003;
+    for (let i = 23; i + 4 < bars.length; i += 4) {
+      const signal = ret(bars[i].close, bars[i - 4].close) >= 0 ? 1 : -1;
+      const future = ret(bars[i + 4].close, bars[i].close);
+      trendNet += signal * future - .003;
+      fadeNet += -signal * future - .003;
       observations++;
     }
+    const winner = trendNet >= fadeNet ? "trend" : "fade";
     const best = Math.max(trendNet, fadeNet);
-    return { specialist: id, recommendation: best <= 0 ? "HOLD" : trendNet >= fadeNet ? recommendation : recommendation === "BUY" ? "SELL" : recommendation === "SELL" ? "BUY" : "HOLD", evidence: `${observations} one-step, pre-cutoff holdout observations. Trend ${pct(trendNet)} cumulative after modeled turnover; fade ${pct(fadeNet)}.`, metric: round(best * 100), caveat: "Tiny single-path sample, no parameter tuning and no proven edge.", method: "Fixed four-bar sign, next-bar return, 30 bps each hypothetical turn", sourceCutoff: bars.length };
+    const base = recommendation;
+    const flipped: Choice = base === "BUY" ? "SELL" : base === "SELL" ? "BUY" : "HOLD";
+    return {specialist:id,recommendation: best > .003 ? winner === "trend" ? base : flipped : "HOLD",
+      evidence:`${observations} non-overlapping four-bar pre-cutoff holdouts. Trend ${pct(trendNet)} and fade ${pct(fadeNet)} net of one 30bp round trip per sample.`,
+      metric:round(best * 100),caveat:"Small historical fictional sample; no proven predictive edge or future-bar access.",
+      method:"Disjoint 4-bar forward holdouts with 30 bps per closed position",sourceCutoff:bars.length};
   }
   const recentRange = bars.slice(-6).reduce((sum, b) => sum + (b.high - b.low) / b.open, 0) / 6;
   return { specialist: id, recommendation: recentRange > .009 ? "HOLD" : recommendation, evidence: `Mission brief: ${brief} Recent six-bar high/low range averages ${(recentRange * 100).toFixed(2)}%.`, metric: round(recentRange * 100), caveat: "Scenario context only. No external news or prediction-market data is being verified.", method: "Brief and six completed bar ranges", sourceCutoff: bars.length };
@@ -54,10 +62,17 @@ export function riskGate(bars: Bar[]) {
 export function conveneCouncil(jobs: Job[], bars: Bar[]): Council {
   const risk = riskGate(bars);
   const votes = jobs.map(j => ({ specialist: SPECIALISTS.find(s => s.id === j.specialist)!.name, action: j.report.recommendation, evidence: j.report.evidence }));
-  const counts: Record<Choice, number> = { BUY: 0, SELL: 0, HOLD: 0 };
-  for (const j of jobs) counts[j.report.recommendation] += j.specialist === "quant" ? 2 : 1;
-  const sorted = (["BUY", "SELL", "HOLD"] as Choice[]).sort((a, b) => counts[b] - counts[a] || (a === "HOLD" ? -1 : b === "HOLD" ? 1 : a.localeCompare(b)));
-  const recommendation = sorted[0];
+  // HOLD represents absence of sufficient evidence; it must not overwhelm
+  // two independent directional findings just because a quant abstained.
+  const score: Record<Choice, number> = {BUY:0,SELL:0,HOLD:0};
+  const weights: Record<Specialist, number> = {trend:1,flow:1.25,quant:1.2,scenario:0.9};
+  for (const job of jobs) {
+    const weight=weights[job.specialist];
+    score[job.report.recommendation] += job.report.recommendation === "HOLD" ? .45 * weight : weight;
+  }
+  const strongest=score.BUY >= score.SELL ? "BUY" : "SELL";
+  const netDirectional=Math.abs(score.BUY-score.SELL);
+  const recommendation:Choice=score[strongest] > score.HOLD && netDirectional >= .85 ? strongest : "HOLD";
   const dissent = votes.find(v => v.action !== recommendation)?.evidence || "No dispatched specialist opposed the leading call; missing reports remain unknown.";
   return { recommendation, votes, risk, execution: { costAt10PctCents: 300, costAt20PctCents: 600, stressPct: risk.observedRangePct }, dissent, reportCount: jobs.length };
 }

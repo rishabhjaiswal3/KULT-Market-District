@@ -1,4 +1,4 @@
-import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, uniqueIndex, index, primaryKey } from "drizzle-orm/sqlite-core";
 
 export const profiles = sqliteTable("profiles", {
   owner: text("owner").primaryKey(),
@@ -155,3 +155,12 @@ export const executionLocks = sqliteTable("execution_locks", {
   portfolioVersion: integer("portfolio_version").notNull(),
   proposalId: text("proposal_id").notNull(),
 }, (table) => [uniqueIndex("execution_locks_owner_version").on(table.owner, table.portfolioVersion)]);
+
+// V7 Arena: server-private instant missions (not prize-ranked).
+export const arenaV7Sessions = sqliteTable("arena_v7_sessions", {
+ id:text("id").primaryKey(), owner:text("owner").notNull(), seasonKey:text("season_key").notNull(),episodeId:text("episode_id").notNull(),
+ snapshotJson:text("snapshot_json").notNull(),commitment:text("commitment").notNull(),status:text("status").notNull().default("open"),
+ councilJson:text("council_json"),councilHash:text("council_hash"),decisionJson:text("decision_json"),createdAt:text("created_at").notNull(),settledAt:text("settled_at"),
+},t=>[uniqueIndex("arena_v7_owner_season_episode").on(t.owner,t.seasonKey,t.episodeId),index("arena_v7_session_owner").on(t.owner,t.seasonKey)]);
+export const arenaV7Wallets=sqliteTable("arena_v7_wallets", {owner:text("owner").notNull(), seasonKey:text("season_key").notNull(),creditsRemaining:integer("credits_remaining").notNull().default(100),createdAt:text("created_at").notNull()},t=>[primaryKey({columns:[t.owner,t.seasonKey]})]);
+export const arenaV7Jobs=sqliteTable("arena_v7_jobs", {id:text("id").primaryKey(),owner:text("owner").notNull(),sessionId:text("session_id").notNull(),specialist:text("specialist").notNull(),cost:integer("cost").notNull(),reportJson:text("report_json").notNull(),createdAt:text("created_at").notNull()},t=>[uniqueIndex("arena_v7_jobs_session_role").on(t.sessionId,t.specialist),index("arena_v7_jobs_owner_session").on(t.owner,t.sessionId)]);

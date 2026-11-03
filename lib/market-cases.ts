@@ -107,25 +107,41 @@ export function grade(choice: Choice, confidence: number, result: NonNullable<Aw
   return { choice, confidence, pnlCents, equityCents: 1_000_000 + pnlCents, brier, correctDirection: choice === best, lesson, outcomes, best, costCents, allocationBps };
 }
 
+/**
+ * v6 scenario generation. New cases use symmetric up/down archetypes to eliminate
+ * the v5 always-SELL drift. A regime is fixed before the case opens; independent
+ * crypto randomness builds the future, and only a SHA-256 commitment is public.
+ * Existing v5 D1 snapshots are NEVER regenerated or changed.
+ */
 export async function generateFrozenDaily(id: string): Promise<FrozenDaily> {
-  const random = new Uint32Array(185); crypto.getRandomValues(random);
+  const random = new Uint32Array(240);
+  crypto.getRandomValues(random);
   const unit = (i: number) => random[i] / 4294967296;
-  const regimeIndex = random[0] % 4;
-  const regimes = ["trend", "range", "false breakout", "volatility shock"];
-  const before = [.001, .0001, .002, -.0007][regimeIndex];
-  const after = [.0024, .00012, -.0032, -.0042][regimeIndex];
+  const regimeIndex = random[0] % 8;
+  const regimes = [
+    "bull trend", "bear trend", "bull trap", "bear trap",
+    "range up", "range down", "shock up", "shock down",
+  ];
+  // Mirrored regimes: even indices are positive future, odd indices negative.
+  const family = Math.floor(regimeIndex / 2);
+  const direction = regimeIndex % 2 === 0 ? 1 : -1;
+  const beforeDrift = [0.0011, -0.0013, 0.00014, -0.001][family] * direction;
+  const afterMagnitude = [0.0035, 0.0038, 0.00035, 0.0047][family];
+  const afterDrift = afterMagnitude * direction;
   const bars: Bar[] = [];
   let previous = 100 + unit(1) * 16;
   for (let i = 0; i < 60; i++) {
-    const base = i < 48 ? before : after;
-    const jitter = (unit(2 + i * 3) - .5) * (regimeIndex === 3 ? .011 : .006);
+    const pre = i < 48;
+    const shock = family === 3;
+    const base = pre ? beforeDrift : afterDrift;
+    const jitter = (unit(2 + i * 3) - .5) * (shock ? (pre ? .031 : .016) : (pre ? .006 : .007));
     const close = Math.max(10, previous * (1 + base + jitter));
-    const range = .001 + unit(3 + i * 3) * (regimeIndex === 3 ? .012 : .007);
-    bars.push({ step: i+1, open: round(previous), high: round(Math.max(previous, close)*(1+range)), low: round(Math.min(previous,close)*(1-range)), close: round(close), volume: Math.round(120 + unit(4 + i*3)*650) });
+    const range = .001 + unit(3 + i * 3) * (shock ? .030 : .007);
+    bars.push({step:i+1,open:round(previous),high:round(Math.max(previous,close)*(1+range)),low:round(Math.min(previous,close)*(1-range)),close:round(close),volume:Math.round((120+unit(4+i*3)*650) * (pre && i>=40 ? (family===0 ? (unit(185)<.7 ? 1.65 : .68) : family===1 ? (unit(185)<.7 ? .42 : 1.48) : family===2 ? (unit(185)<.45 ? 1.42 : .95) : (unit(185)<.5 ? .7 : 1.3)) : 1))});
     previous = close;
   }
-  const version = "training-sim-v5";
-  return { bars, regime: regimes[regimeIndex], version, commitment: await sha256(JSON.stringify({ id, version, bars })) };
+  const version = "training-sim-v6-balanced";
+  return {bars,regime:regimes[regimeIndex],version,commitment:await sha256(JSON.stringify({id,version,bars}))};
 }
 
 export function replayIds() { return REPLAY.map(c => c.id); }

@@ -29,6 +29,13 @@
       "when": 1793572989667,
       "tag": "0003_new_infant_terrible",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793709000000,
+      "tag": "0004_market_arena_v7",
+      "breakpoints": true
     }
   ]
 }
